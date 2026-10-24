@@ -3,7 +3,10 @@ package nql
 import "testing"
 
 func Test_SetGetValue(t *testing.T) {
-	e := NewEngine()
+	e, err := NewEngine()
+	if err != nil {
+		t.Error("Engine setup failed")
+	}
 	e.Set("foo", "bar")
 	value, err := e.Get("foo")
 	if err != nil {
