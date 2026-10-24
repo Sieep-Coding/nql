@@ -8,7 +8,7 @@ import (
 )
 
 type Engine struct {
-	data map[string]string
+	data map[string]int64
 	file *os.File
 	mu   sync.Mutex
 }
@@ -21,7 +21,7 @@ func NewEngine() (*Engine, error) {
 		return nil, err
 	}
 	return &Engine{
-		data: make(map[string]string),
+		data: make(map[string]int64),
 		file: file,
 		mu:   sync.Mutex{},
 	}, nil
@@ -35,18 +35,41 @@ func (e *Engine) Get(key string) (string, error) {
 		return "", fmt.Errorf("key not found")
 	}
 
-	_, err := e.file.Seek(e.data[key]+int64(len(key))+1,0)
+	_, err := e.file.Seek(e.data[key]+int64(len(key))+1, 0)
 	if err != nil {
 		return "", fmt.Errorf("error seeking in file: %w", err)
 	}
-	return e.data[key], nil
+
+	buffer := make([]byte, 1)
+
+	var content []byte
+
+	for {
+		n, err := e.file.Read(buffer)
+
+		if err != nil {
+			fmt.Println("Error reading from file:", err)
+			break
+		}
+
+		if n == 0 {
+			fmt.Println("End of file reached")
+			break
+		}
+
+		if buffer[0] == '\n' {
+			break
+		}
+		content = append(content, buffer[0])
+	}
+	return string(content), nil
 }
 
 func (e *Engine) Set(key, value string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	_, err := e.file.Seek(0, io.SeekEnd)
+	offset, err := e.file.Seek(0, io.SeekEnd)
 	if err != nil {
 		fmt.Println("Error seeking to end of file:", err)
 		return err
@@ -57,6 +80,6 @@ func (e *Engine) Set(key, value string) error {
 		fmt.Println("Error appending text to file:", err)
 		return err
 	}
-	e.data[key] = value
+	e.data[key] = offset
 	return nil
 }
