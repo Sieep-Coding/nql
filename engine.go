@@ -1,3 +1,13 @@
+/*
+License: MIT
+Author: Nick Stambaugh
+
+10-24-26: There is still some bugs with the compacting of the file.
+It is not removing the old values from the file.
+One of my unit tests is failing due to expecting "foo bar" to be the only line in the file, but it is not.
+I will need to fix this issue.
+*/
+
 package nql
 
 import (
@@ -76,23 +86,49 @@ func (e *Engine) Get(key string) (string, error) {
 	return string(content), nil
 }
 
-func (e *Engine) Set(key, value string) error {
+func (e *Engine) Set(key string, value string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	if strings.Contains(key, " ") {
+		return fmt.Errorf("key cannot contain spaces")
+	}
+
+	return e.setRaw(key, value)
+}
+
+func (e *Engine) setRaw(key string, value string) error {
+	offset, err := e.saveToFile(key, value)
+	if err != nil {
+		return err
+	}
+
+	e.setKey(key, offset)
+	return nil
+}
+
+func (e *Engine) setKey(key string, value int64) error {
+	e.data[key] = value
+	_, err := e.saveToFile(key, fmt.Sprintf("%d", value))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (e *Engine) saveToFile(key string, value string) (int64, error) {
 	offset, err := e.file.Seek(0, io.SeekEnd)
 	if err != nil {
 		fmt.Println("Error seeking to end of file:", err)
-		return err
+		return 0, err
 	}
 
 	_, err = e.file.WriteString(key + keyValueSeparator + value + "\n")
 	if err != nil {
 		fmt.Println("Error appending text to file:", err)
-		return err
+		return 0, err
 	}
-	e.data[key] = offset
-	return nil
+	return offset, nil
 }
 
 func (e *Engine) CompactFile() error {
@@ -129,4 +165,26 @@ func (e *Engine) GetMapFromFile() ([]Item, map[string]string) {
 		}
 	}
 	return i, m
+}
+
+func (e *Engine) Restore() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	items, _ := e.GetMapFromFile()
+
+	for _, v := range items {
+		e.setKey(v.Key, v.Offset)
+	}
+}
+
+func (e *Engine) Close() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	err := e.file.Close()
+	if err != nil {
+		return err
+	}
+	return nil
 }
