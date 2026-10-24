@@ -39,3 +39,16 @@ func Test_SetGetKeyValue(t *testing.T) {
 		t.Error("should return error")
 	}
 }
+
+func Test_GetMapFromFile(t *testing.T) {
+	e, err := NewEngine()
+	if err != nil {
+		t.Error("Engine setup failed")
+	}
+	e.mu.Lock()
+	_, _ = e.GetMapFromFile()
+	e.mu.Unlock()
+	if err != nil {
+		t.Error("Failed to get map from file")
+	}
+}

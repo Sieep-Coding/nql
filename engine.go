@@ -1,10 +1,13 @@
 package nql
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
+	"time"
 )
 
 type Engine struct {
@@ -13,7 +16,15 @@ type Engine struct {
 	mu   sync.Mutex
 }
 
+type Item struct {
+	Key    string
+	Value  string
+	Offset int64
+}
+
 var keyValueSeparator = " "
+
+const Seconds = 5
 
 func NewEngine() (*Engine, error) {
 	file, err := os.OpenFile("data.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
@@ -82,4 +93,40 @@ func (e *Engine) Set(key, value string) error {
 	}
 	e.data[key] = offset
 	return nil
+}
+
+func (e *Engine) CompactFile() error {
+	for {
+		time.Sleep(time.Duration(Seconds) * time.Second)
+		fmt.Println("Compacting file...")
+		e.mu.Lock()
+		_, err := e.GetMapFromFile()
+		e.mu.Unlock()
+		if err != nil {
+			fmt.Println("Error getting map from file:", err)
+		}
+	}
+}
+
+func (e *Engine) GetMapFromFile() ([]Item, map[string]string) {
+	m := make(map[string]string)
+	i := []Item{}
+
+	_, err := e.file.Seek(0, 0)
+	if err != nil {
+		fmt.Println("Error seeking to start of file:", err)
+		return i, m
+	}
+	var totalBytesRead int64
+	scanner := bufio.NewScanner(e.file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		offset := totalBytesRead
+		parts := strings.Split(line, keyValueSeparator)
+		if len(parts) >= 2 {
+			m[parts[0]] = parts[1]
+			i = append(i, Item{Key: parts[0], Value: parts[1], Offset: offset})
+		}
+	}
+	return i, m
 }

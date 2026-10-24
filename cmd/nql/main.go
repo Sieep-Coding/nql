@@ -1,11 +1,12 @@
-package nql
+package main
 
 import (
 	"fmt"
+	"nql"
 )
 
 func main() {
-	e, err := NewEngine()
+	e, err := nql.NewEngine()
 	if err != nil {
 		panic(err)
 	}
